@@ -604,7 +604,7 @@ class ScanWidget(QtGui.QMainWindow):
             main = self.main
             lasers = main.laserWidgets
             if (lasers.DigCtrl.DigitalControlButton.isChecked() and
-               main.trigsourceparam.value() == 'External "frame-trigger"'):
+                main.trigsourceparam.value() == 'External "frame-trigger"'):
                 self.prepAndRun()
             else:
                 self.digModWarning.exec_()

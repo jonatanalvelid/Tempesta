@@ -24,7 +24,7 @@ import h5py as hdf
 import tifffile as tiff     # http://www.lfd.uci.edu/~gohlke/pythonlibs/#vlfd
 from lantz import Q_
 
-import control.lasercontrol as lasercontrol
+import control.lasercontrol_fra as lasercontrol
 import control.scanner as scanner
 import control.guitools as guitools
 import control.focus as focus
@@ -935,13 +935,13 @@ class TormentaGUI(QtGui.QMainWindow):
     liveviewStarts = QtCore.pyqtSignal()
     liveviewEnds = QtCore.pyqtSignal()
 
-    def __init__(self, actlaser, offlaser, exclaser, cameras, nidaq, pzt,
-                 webcam, *args, **kwargs):
+    def __init__(self, violetlaser, bluelaser, bluelaser2, greenlaser, uvlaser, cameras, nidaq, pzt, webcam,
+                 *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-#        self.resize(2400, 1300)
+        # self.resize(1920, 1080)
 
-        self.lasers = [actlaser, offlaser, exclaser]
+        self.lasers = [violetlaser, bluelaser, bluelaser2, greenlaser, uvlaser]
         self.cameras = cameras
         self.nidaq = nidaq
         self.orcaflash = self.cameras[0]
@@ -1226,19 +1226,19 @@ class TormentaGUI(QtGui.QMainWindow):
         alignmentLayout.addWidget(self.alignmentCheck, 1, 1)
         alignmentDock = Dock("Alignment Tool", size=(1, 1))
         alignmentDock.addWidget(self.alignmentWidget)
-        illumDockArea.addDock(alignmentDock, 'right')
+#        illumDockArea.addDock(alignmentDock, 'right')
 
         # Z align widget
         ZalignDock = Dock("Axial Alignment Tool", size=(1, 1))
         self.ZalignWidget = guitools.AlignWidgetAverage(self)
         ZalignDock.addWidget(self.ZalignWidget)
-        illumDockArea.addDock(ZalignDock, 'above', alignmentDock)
+#        illumDockArea.addDock(ZalignDock, 'above', alignmentDock)
 
         # Rotational align widget
         RotalignDock = Dock("Rotational Alignment Tool", size=(1, 1))
         self.RotalignWidget = guitools.AlignWidgetXYProject(self)
         RotalignDock.addWidget(self.RotalignWidget)
-        illumDockArea.addDock(RotalignDock, 'above', alignmentDock)
+#        illumDockArea.addDock(RotalignDock, 'above', alignmentDock)
 
         # Dock widget
         dockArea = DockArea()
@@ -1259,7 +1259,7 @@ class TormentaGUI(QtGui.QMainWindow):
         piezoDock = Dock('Piezo positioner', size=(1, 1))
         self.piezoWidget = scanner.Positionner(self.scanWidget)
         piezoDock.addWidget(self.piezoWidget)
-        dockArea.addDock(piezoDock, 'bottom', alignmentDock)
+#        dockArea.addDock(piezoDock, 'bottom', alignmentDock)
 
         console = ConsoleWidget(namespace={'pg': pg, 'np': np})
 
@@ -1279,13 +1279,14 @@ class TormentaGUI(QtGui.QMainWindow):
         layout.addWidget(illumDockArea, 0, 3, 2, 1)
         layout.addWidget(dockArea, 2, 3, 4, 1)
 
-        layout.setRowMinimumHeight(2, 175)
-        layout.setRowMinimumHeight(3, 100)
-        layout.setRowMinimumHeight(5, 175)
-        layout.setColumnMinimumWidth(0, 275)
-        imageWidget.ci.layout.setColumnFixedWidth(1, 1150)
-        imageWidget.ci.layout.setRowFixedHeight(1, 1150)
-        layout.setColumnMinimumWidth(2, 1350)
+        # layout.setRowMinimumHeight(2, 175)
+        # layout.setRowMinimumHeight(3, 100)
+        # layout.setRowMinimumHeight(5, 175)
+        # layout.setColumnMinimumWidth(0, 275)
+        imageWidget.ci.layout.setColumnFixedWidth(1, 600)
+        imageWidget.ci.layout.setRowFixedHeight(1, 600)
+        layout.setRowMinimumHeight(2, 40)
+        layout.setColumnMinimumWidth(2, 1000)
 
     def autoLevels(self):
         self.hist.setLevels(*guitools.bestLimits(self.img.image))
