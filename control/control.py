@@ -656,35 +656,7 @@ class RecWorker(QtCore.QObject):
             laserWidget = self.main.main.laserWidgets
             laserWidget.DigCtrl.DigitalControlButton.setChecked(True)
 
-#  <<<<<<< HEAD
-#        else:
-#            while self.pressed:
-#                self.tRecorded = time.time() - self.starttime
-#                time.sleep(0.01)
-#                self.updateSignal.emit()
-#
-#        self.lvworker.stopRecording()
-#
-#        # get the recorded data
-#        data = self.lvworker.fRecorded
-#        # Adapted for ImageJ data read shape
-#        if self.recMode in [3, 4]:
-#            try:
-#                if self.scanWidget.scanMode.currentText() == 'VOL scan':
-#                    sizeZ = self.scanWidget.scanParValues['sizeZ']
-#                    stepSizeZ = self.scanWidget.scanParValues['stepSizeZ']
-#                    stepsZ = int(np.ceil(sizeZ / stepSizeZ))
-#                else:
-#                    stepsZ = 1
-#                datashape = (stepsZ, int(len(data)/stepsZ), self.shape[1],
-#                             self.shape[0])
-#                reshapeddata = np.reshape(data, datashape, order='C')
-#
-#                for i, scan in enumerate(reshapeddata):
-#                    self.main.saveData(scan, self.savename + '_' + str(i))
-#            except ValueError:
-#                print('Data could not be saved')
-# =======
+
             # Getting Z steps
             if self.scanWidget.scanMode.currentText() == 'VOL scan':
                 sizeZ = self.scanWidget.scanParValues['sizeZ']
@@ -732,7 +704,6 @@ class RecWorker(QtCore.QObject):
                             dataset[nStored:] = newFrames
                             nStored += len(newFrames)
                             self.updateSignal.emit()
-# >>>>>>> a2b00f479ff618b99a1c8fb8d63a5506fd2fd4bc
         else:
             if saveMode == 'tiff':
                 with tiff.TiffWriter(self.savename + '.tiff',
