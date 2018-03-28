@@ -783,14 +783,15 @@ class Scanner(QtCore.QObject):
 
         # Same as above but for the digital signals/devices
         devs = list(self.pxCycle.sigDict.keys())
-        DOchans = range(0, 4)
+        DOchans = range(1, 5)
         for d in DOchans:
             chanstring = 'Dev1/port0/line%s' % d
+            print('Adding', chanstring)
             self.dotask.do_channels.add_do_chan(
                 lines=chanstring, name_to_assign_to_lines='chan%s' % devs[d])
 
         fullDOsig = np.array(
-            [self.pxCycle.sigDict[devs[i]] for i in DOchans])
+            [self.pxCycle.sigDict[devs[i]] for i in range(0,len(devs))])
 
         """When doing unidirectional scan, the time needed for the stage to
         move back to the initial x needs to be filled with zeros/False.
@@ -1277,16 +1278,20 @@ class LaserCycle():
         self.dotask = nidaqmx.Task('dotaskLaser')
 
         devs = list(self.pxCycle.sigDict.keys())
-        DOchans = range(0, 4)
-        for d in DOchans:
-            chanstring = 'Dev1/port0/line%s' % d
+        DOchans = range(1,5)
+        assert len(devs) == len(DOchans), '# digital channels is not the same as # devices'
+        it = range(0, len(devs))
+        for i in it:
+            print('Adding line', DOchans[i])
+            chanstring = 'Dev1/port0/line%s' % DOchans[i]
             self.dotask.do_channels.add_do_chan(
-                lines=chanstring, name_to_assign_to_lines='chan%s' % devs[d])
-
-        DOchans = [0, 1, 2, 3]
+                lines=chanstring, name_to_assign_to_lines='chan%s' % devs[i])
+        
+        print('Finished adding lines')
+        
         fullDOsig = np.array(
-            [self.pxCycle.sigDict[devs[i]] for i in DOchans])
-
+            [self.pxCycle.sigDict[devs[i]] for i in range(0, len(DOchans))])
+        
         self.dotask.timing.cfg_samp_clk_timing(
            source=r'100kHzTimeBase',
            rate=self.pxCycle.sampleRate,
