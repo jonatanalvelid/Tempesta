@@ -10,7 +10,9 @@ import time
 import numpy as np
 
 import h5py as hdf
-import tifffile as tiff     # http://www.lfd.uci.edu/~gohlke/pythonlibs/#vlfd
+import tifffile as tiff     
+
+
 # Widget to control image or sequence recording. Recording only possible when
 # liveview active. StartRecording called when "Rec" presset. Creates recording
 # thread with RecWorker, recording is then done in this seperate thread.
@@ -24,6 +26,7 @@ class RecordingWidget(QtGui.QFrame):
         super().__init__(*args, **kwargs)
 
         self.main = main
+        self.nCameras = len(main.cameras)
         self.dataname = 'data'      # In case I need a QLineEdit for this
 
         self.recworkers = [None] * len(self.main.cameras)
@@ -33,7 +36,7 @@ class RecordingWidget(QtGui.QFrame):
         self.z_stack = []
         self.recMode = 1
 
-        self.dataDir = r"D:\Data"
+        self.dataDir = r"F:\Tempesta\DefaultDataFolderSSD"
         self.initialDir = os.path.join(self.dataDir, time.strftime('%Y-%m-%d'))
 
         self.filesizewar = QtGui.QMessageBox()
@@ -383,9 +386,9 @@ class RecordingWidget(QtGui.QFrame):
         savename = guitools.getUniqueName(savename)
         image = self.main.latest_images[self.main.currCamIdx].astype(np.uint16)
         tiff.imsave(
-            savename, image, description=self.dataname, software='Tormenta',
-            imagej=True, resolution=(1/self.main.umxpx, 1/self.main.umxpx),
-            metadata={'spacing': 1, 'unit': 'um'})
+            savename, image, description=self.dataname, software='Tempesta',
+            imagej=True, resolution=(1/self.main.umxpx, 1/self.main.umxpx))
+#        , metadata={'spacing': 1, 'unit': 'um'})
 
         guitools.attrsToTxt(os.path.splitext(savename)[0], self.getAttrs())
 
@@ -396,14 +399,14 @@ class RecordingWidget(QtGui.QFrame):
         root.destroy()
 
     def updateGUI(self):
-        pass
-#        eSecs = self.worker.tRecorded
-#        nframe = self.worker.frames_recorded
+
+        eSecs = self.recworkers[self.main.currCamIdx].tRecorded
+        nframe = self.recworkers[self.main.currCamIdx].nStored
 #        rSecs = self.getTimeOrFrames() - eSecs
 #        rText = '{}'.format(datetime.timedelta(seconds=max(0, rSecs)))
 #        self.tRemaining.setText(rText)
-#        self.currentFrame.setText(str(nframe) + ' /')
-#        self.currentTime.setText(str(int(eSecs)) + ' /')
+        self.currentFrame.setText(str(nframe) + ' /')
+        self.currentTime.setText(str(int(eSecs)) + ' /')
 #        self.progressBar.setValue(100*(1 - rSecs / (eSecs + rSecs)))
 
     def startRecording(self):
@@ -430,7 +433,8 @@ class RecordingWidget(QtGui.QFrame):
                 # Saves the time when started to calculate remaining time.
                 self.startTime = ptime.time()
 
-                if self.recMode == 4:
+                
+                if self.recMode == 4: # recMode 4 is timelapse scan
                     total = float(self.timeLapseTotalEdit.text())
                     each = float(self.timeLapseEdit.text())
                     self.timeLapseScan = int(np.ceil(total/each))
@@ -522,10 +526,10 @@ class RecordingWidget(QtGui.QFrame):
                     self.currentFrame.setText('0 /')
 
     def makeSavenames(self):
-        try:
-            self.nCameras = 2
-        except AttributeError:
-            self.nCameras = 1
+#        try:
+#            self.nCameras = 2
+#        except AttributeError:
+#            self.nCameras = 1
         folder = self.folderEdit.text()
         if not os.path.exists(folder):
             os.mkdir(folder)
@@ -550,7 +554,7 @@ class RecWorker(QtCore.QObject):
 
         self.main = main
         self.camera = camera
-        self.recMode = recMode  # 1=frames, 2=time, 3=until stop
+        self.recMode = recMode  # 1=frames, 2=time, 3=scan once, 4=Time-lapse scan, 5=until stop
         # Nr of seconds or frames to record depending on bool_ToF.
         self.timeorframes = timeorframes
         self.shape = shape  # Shape of one frame
@@ -562,16 +566,17 @@ class RecWorker(QtCore.QObject):
         self.pressed = True
         self.done = False
         self.scanWidget = self.main.main.scanWidget
-
+        
+        self.nStored = 0; # number of frames stored
+        self.tRecorded = 0
     def start(self):
         # Set initial values
-        self.tRecorded = 0
+        
 
         self.lvworker.startRecording()
         time.sleep(0.1)
 
         self.starttime = time.time()
-        nStored = 0  # number of frames stored
         saveMode = self.main.formatBox.currentText()
 
         # Main loop for waiting until recording is finished and sending update
@@ -580,11 +585,12 @@ class RecWorker(QtCore.QObject):
             if saveMode == 'tiff':
                 with tiff.TiffWriter(self.savename + '.tiff',
                                      software='Tormenta') as storeFile:
-                    nFrames = len(self.lvworker.fRecorded)
-                    while nFrames < self.timeorframes and self.pressed:
+#                    nFrames = len(self.lvworker.fRecorded)
+                    while self.nStored < self.timeorframes and self.pressed:
+                        self.tRecorded = time.time() - self.starttime
                         time.sleep(0.01)
-                        newFrames = self.lvworker.fRecorded[nStored:]
-                        nStored += len(newFrames)
+                        newFrames = self.lvworker.fRecorded[self.nStored:]
+                        self.nStored += len(newFrames)
                         for frame in newFrames:
                             storeFile.save(frame)
                         self.updateSignal.emit()
@@ -594,13 +600,14 @@ class RecWorker(QtCore.QObject):
                         'Images', (1, self.shape[0], self.shape[1]),
                         maxshape=(None, self.shape[0], self.shape[1]))
                     dataset = storeFile['Images']
-                    nFrames = len(self.lvworker.fRecorded)
-                    while nFrames < self.timeorframes and self.pressed:
+#                    nFrames = len(self.lvworker.fRecorded)
+                    while self.nStored < self.timeorframes and self.pressed:
+                        self.tRecorded = time.time() - self.starttime
                         time.sleep(0.01)
-                        newFrames = self.lvworker.fRecorded[nStored:]
-                        dataset.resize((nStored+len(newFrames)), axis=0)
-                        dataset[nStored:] = newFrames
-                        nStored += len(newFrames)
+                        newFrames = self.lvworker.fRecorded[self.nStored:]
+                        dataset.resize((self.nStored+len(newFrames)), axis=0)
+                        dataset[self.nStored:] = newFrames
+                        self.nStored += len(newFrames)
                         self.updateSignal.emit()
 
         elif self.recMode == 2:
@@ -610,8 +617,8 @@ class RecWorker(QtCore.QObject):
                     while self.tRecorded < self.timeorframes and self.pressed:
                         self.tRecorded = time.time() - self.starttime
                         time.sleep(0.01)
-                        newFrames = self.lvworker.fRecorded[nStored:]
-                        nStored += len(newFrames)
+                        newFrames = self.lvworker.fRecorded[self.nStored:]
+                        self.nStored += len(newFrames)
                         for frame in newFrames:
                             storeFile.save(frame)
                         self.updateSignal.emit()
@@ -625,10 +632,10 @@ class RecWorker(QtCore.QObject):
                     while self.tRecorded < self.timeorframes and self.pressed:
                         self.tRecorded = time.time() - self.starttime
                         time.sleep(0.01)
-                        newFrames = self.lvworker.fRecorded[nStored:]
-                        dataset.resize((nStored + len(newFrames)), axis=0)
-                        dataset[nStored:] = newFrames
-                        nStored += len(newFrames)
+                        newFrames = self.lvworker.fRecorded[self.nStored:]
+                        dataset.resize((self.nStored + len(newFrames)), axis=0)
+                        dataset[self.nStored:] = newFrames
+                        self.nStored += len(newFrames)
                         self.updateSignal.emit()
 
         elif self.recMode in [3, 4]:
@@ -654,14 +661,14 @@ class RecWorker(QtCore.QObject):
                     name = self.savename + '_z' + str(i) + '.tiff'
                     with tiff.TiffWriter(name, software='Tormenta') \
                             as storeFile:
-                        while nStored != framesExpected*(i + 1) \
+                        while self.nStored != framesExpected*(i + 1) \
                                 and self.pressed:
                             time.sleep(0.01)
-                            newFrames = self.lvworker.fRecorded[nStored:]
-                            if nStored + len(newFrames) > framesExpected*(i+1):
-                                maxF = framesExpected*(i + 1) - nStored
+                            newFrames = self.lvworker.fRecorded[self.nStored:]
+                            if self.nStored + len(newFrames) > framesExpected*(i+1):
+                                maxF = framesExpected*(i + 1) - self.nStored
                                 newFrames = newFrames[:maxF]
-                            nStored += len(newFrames)
+                            self.nStored += len(newFrames)
                             for frame in newFrames:
                                 storeFile.save(frame)
                             self.updateSignal.emit()
@@ -673,26 +680,26 @@ class RecWorker(QtCore.QObject):
                         dataset = zPlane.create_dataset(
                             'Images', (1, self.shape[0], self.shape[1]),
                             maxshape=(None, self.shape[0], self.shape[1]))
-                        while nStored != framesExpected*(i+1)\
+                        while self.nStored != framesExpected*(i+1)\
                                 and self.pressed:
                             time.sleep(0.01)
-                            newFrames = self.lvworker.fRecorded[nStored:]
-                            if nStored+len(newFrames) > framesExpected*(i+1):
-                                maxF = framesExpected*(i+1)-nStored
+                            newFrames = self.lvworker.fRecorded[self.nStored:]
+                            if self.nStored+len(newFrames) > framesExpected*(i+1):
+                                maxF = framesExpected*(i+1)-self.nStored
                                 newFrames = newFrames[:maxF]
-                            size = (nStored-framesExpected*i+len(newFrames))
+                            size = (self.nStored-framesExpected*i+len(newFrames))
                             dataset.resize(size, axis=0)
-                            dataset[nStored:] = newFrames
-                            nStored += len(newFrames)
+                            dataset[self.nStored:] = newFrames
+                            self.nStored += len(newFrames)
                             self.updateSignal.emit()
-        else:
+        elif self.recMode == 5:
             if saveMode == 'tiff':
                 with tiff.TiffWriter(self.savename + '.tiff',
                                      software='Tormenta') as storeFile:
                     while self.pressed:
                         time.sleep(0.01)
-                        newFrames = self.lvworker.fRecorded[nStored:]
-                        nStored += len(newFrames)
+                        newFrames = self.lvworker.fRecorded[self.nStored:]
+                        self.nStored += len(newFrames)
                         for frame in newFrames:
                             storeFile.save(frame)
                         self.updateSignal.emit()
@@ -705,13 +712,14 @@ class RecWorker(QtCore.QObject):
                     dataset = storeFile['Images']
                     while self.pressed:
                         time.sleep(0.01)
-                        newFrames = self.lvworker.fRecorded[nStored:]
-                        dataset.resize((nStored + len(newFrames)), axis=0)
-                        dataset[nStored:] = newFrames
-                        nStored += len(newFrames)
+                        newFrames = self.lvworker.fRecorded[self.nStored:]
+                        dataset.resize((self.nStored + len(newFrames)), axis=0)
+                        dataset[self.nStored:] = newFrames
+                        self.nStored += len(newFrames)
                         self.updateSignal.emit()
 
         self.lvworker.stopRecording()
 
         self.done = True
         self.doneSignal.emit()
+
