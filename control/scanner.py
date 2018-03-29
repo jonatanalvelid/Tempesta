@@ -326,7 +326,18 @@ class ScanWidget(QtGui.QMainWindow):
 
         # The port order in the NIDAQ follows this same order.
         # We chose to follow the temporal sequence order
-        self.allDevices = ['488 Exc', '405', '488 OFF', 'Camera']
+        
+        """Below is the where to set the different devices to be used. The signal
+         for each device is sent in the channel corresponding to the order of 
+         the devices. The array after the device name determines the color for 
+         the device in the graph"""
+        self.Device_info = [['488 Exc', [0, 247, 255]], 
+                           ['405', [130, 0, 200]], 
+                           ['488 OFF', [0, 247, 255]], 
+                           ['Camera', [255, 255, 255]]]
+                           
+        self.allDevices = [x[0] for x in self.Device_info]
+            
         self.channelOrder = ['x', 'y', 'z']
 
         self.saveScanBtn = QtGui.QPushButton('Save Scan')
@@ -413,7 +424,7 @@ class ScanWidget(QtGui.QMainWindow):
 
         self.stageScan = StageScan(self.sampleRate)
         self.pxCycle = PixelCycle(self.sampleRate, self.allDevices)
-        self.graph = GraphFrame(self.pxCycle)
+        self.graph = GraphFrame(self.pxCycle, self.Device_info)
         self.graph.plot.getAxis('bottom').setScale(1000/self.sampleRate)
         self.graph.setFixedHeight(100)
         self.updateScan(self.allDevices)
@@ -479,20 +490,8 @@ class ScanWidget(QtGui.QMainWindow):
         for i in range(0, len(self.allDevices)):
             grid.addWidget(QtGui.QLabel(self.allDevices[i]), start_row+i, 0)
             grid.addWidget(self.pxParameters['sta'+self.allDevices[i]], start_row+i, 1)
-            print('Added widget ', self.pxParameters['sta'+self.allDevices[i]], 'to the GUI')
             grid.addWidget(self.pxParameters['end'+self.allDevices[i]], start_row+i, 2)
-#        grid.addWidget(QtGui.QLabel('405:'), 9, 0)
-#        grid.addWidget(self.start405Par, 9, 1)
-#        grid.addWidget(self.end405Par, 9, 2)
-#        grid.addWidget(QtGui.QLabel('488:'), 10, 0)
-#        grid.addWidget(self.start488Par, 10, 1)
-#        grid.addWidget(self.end488Par, 10, 2)
-#        grid.addWidget(QtGui.QLabel('473:'), 11, 0)
-#        grid.addWidget(self.start473Par, 11, 1)
-#        grid.addWidget(self.end473Par, 11, 2)
-#        grid.addWidget(QtGui.QLabel('Camera:'), 12, 0)
-#        grid.addWidget(self.startCAMPar, 12, 1)
-#        grid.addWidget(self.endCAMPar, 12, 2)
+
         grid.addWidget(self.graph, 8, 3, 5, 5)
 
         grid.addWidget(self.multiScanWgt, 13, 0, 4, 9)
@@ -1571,7 +1570,7 @@ class PixelCycle():
 class GraphFrame(pg.GraphicsWindow):
     """Creates the plot that plots the preview of the pulses.
     Fcn update() updates the plot of "device" with signal "signal"."""
-    def __init__(self, pxCycle, *args, **kwargs):
+    def __init__(self, pxCycle, Device_info, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.pxCycle = pxCycle
@@ -1581,7 +1580,10 @@ class GraphFrame(pg.GraphicsWindow):
         self.plot.showGrid(x=False, y=False)
         self.plotSigDict = dict()
         for i in range(0, len(pxCycle.sigDict)):
-            self.plotSigDict[devs[i]] = self.plot.plot()
+            r = Device_info[i][1][0]
+            g = Device_info[i][1][1]
+            b = Device_info[i][1][2]
+            self.plotSigDict[devs[i]] = self.plot.plot(pen=pg.mkPen(r,g,b))
             
 #        self.plotSigDict = {'405': self.plot.plot(pen=pg.mkPen(130, 0, 200)),
 #                            '488': self.plot.plot(pen=pg.mkPen(0, 247, 255)),
