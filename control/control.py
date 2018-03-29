@@ -5,12 +5,9 @@ Created on Mon Jun 16 18:19:24 2014
 @authors: Federico Barabas, Luciano Masullo, Andreas Bodén
 """
 
-import subprocess
-import sys
 import numpy as np
 import os
 import time
-import re
 
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
@@ -19,9 +16,6 @@ from pyqtgraph.parametertree import Parameter, ParameterTree
 from pyqtgraph.dockarea import Dock, DockArea
 from pyqtgraph.console import ConsoleWidget
 
-from tkinter import Tk, filedialog, messagebox
-import h5py as hdf
-import tifffile as tiff     # http://www.lfd.uci.edu/~gohlke/pythonlibs/#vlfd
 from lantz import Q_
 
 import control.lasercontrol as lasercontrol
@@ -29,8 +23,6 @@ import control.scanner as scanner
 import control.guitools as guitools
 import control.focus as focus
 import control.recording as record
-
-
 
 
 class CamParamTree(ParameterTree):
@@ -691,7 +683,7 @@ class TormentaGUI(QtGui.QMainWindow):
         hpos = int(128 * np.ceil(hpos / 128))
         vsize = int(128 * np.ceil(vsize / 128))
         hsize = int(128 * np.ceil(hsize / 128))
-        
+
         minroi = 64
         vsize = int(min(2048 - vpos, minroi * np.ceil(vsize / minroi)))
         hsize = int(min(2048 - hpos, minroi * np.ceil(hsize / minroi)))

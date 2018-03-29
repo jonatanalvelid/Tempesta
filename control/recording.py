@@ -5,12 +5,20 @@ Created on Thu Mar 29 11:27:57 2018
 @author: Tempesta_team
 """
 import os
-from pyqtgraph.Qt import QtCore, QtGui
+import sys
+import subprocess
 import time
 import numpy as np
+import re
 
 import h5py as hdf
-import tifffile as tiff     
+import tifffile as tiff
+
+from pyqtgraph.Qt import QtCore, QtGui
+import pyqtgraph.ptime as ptime
+from tkinter import Tk, filedialog, messagebox
+
+import control.guitools as guitools
 
 
 # Widget to control image or sequence recording. Recording only possible when
@@ -36,7 +44,7 @@ class RecordingWidget(QtGui.QFrame):
         self.z_stack = []
         self.recMode = 1
 
-        self.dataDir = r"F:\Tempesta\DefaultDataFolderSSD"
+        self.dataDir = r"D:\Data"
         self.initialDir = os.path.join(self.dataDir, time.strftime('%Y-%m-%d'))
 
         self.filesizewar = QtGui.QMessageBox()
@@ -387,8 +395,8 @@ class RecordingWidget(QtGui.QFrame):
         image = self.main.latest_images[self.main.currCamIdx].astype(np.uint16)
         tiff.imsave(
             savename, image, description=self.dataname, software='Tempesta',
-            imagej=True, resolution=(1/self.main.umxpx, 1/self.main.umxpx))
-#        , metadata={'spacing': 1, 'unit': 'um'})
+            imagej=True, resolution=(1/self.main.umxpx, 1/self.main.umxpx),
+            metadata={'spacing': 1, 'unit': 'um'})
 
         guitools.attrsToTxt(os.path.splitext(savename)[0], self.getAttrs())
 
@@ -428,13 +436,12 @@ class RecordingWidget(QtGui.QFrame):
                 # Sets camera parameters to not be writable during recording.
                 self.main.tree.writable = False
                 self.main.liveviewButton.setEnabled(False)
-#                self.main.liveviewStop() # Stops liveview from updating
+#                self.main.liveviewStop()  # Stops liveview from updating
 
                 # Saves the time when started to calculate remaining time.
                 self.startTime = ptime.time()
 
-                
-                if self.recMode == 4: # recMode 4 is timelapse scan
+                if self.recMode == 4:   # recMode 4 is timelapse scan
                     total = float(self.timeLapseTotalEdit.text())
                     each = float(self.timeLapseEdit.text())
                     self.timeLapseScan = int(np.ceil(total/each))
@@ -526,10 +533,6 @@ class RecordingWidget(QtGui.QFrame):
                     self.currentFrame.setText('0 /')
 
     def makeSavenames(self):
-#        try:
-#            self.nCameras = 2
-#        except AttributeError:
-#            self.nCameras = 1
         folder = self.folderEdit.text()
         if not os.path.exists(folder):
             os.mkdir(folder)
@@ -554,7 +557,8 @@ class RecWorker(QtCore.QObject):
 
         self.main = main
         self.camera = camera
-        self.recMode = recMode  # 1=frames, 2=time, 3=scan once, 4=Time-lapse scan, 5=until stop
+        # 1=frames, 2=time, 3=scan once, 4=Time-lapse scan, 5=until stop
+        self.recMode = recMode
         # Nr of seconds or frames to record depending on bool_ToF.
         self.timeorframes = timeorframes
         self.shape = shape  # Shape of one frame
@@ -566,13 +570,11 @@ class RecWorker(QtCore.QObject):
         self.pressed = True
         self.done = False
         self.scanWidget = self.main.main.scanWidget
-        
-        self.nStored = 0; # number of frames stored
-        self.tRecorded = 0
-    def start(self):
-        # Set initial values
-        
 
+        self.nStored = 0  # number of frames stored
+        self.tRecorded = 0
+
+    def start(self):
         self.lvworker.startRecording()
         time.sleep(0.1)
 
@@ -585,7 +587,6 @@ class RecWorker(QtCore.QObject):
             if saveMode == 'tiff':
                 with tiff.TiffWriter(self.savename + '.tiff',
                                      software='Tormenta') as storeFile:
-#                    nFrames = len(self.lvworker.fRecorded)
                     while self.nStored < self.timeorframes and self.pressed:
                         self.tRecorded = time.time() - self.starttime
                         time.sleep(0.01)
@@ -594,13 +595,13 @@ class RecWorker(QtCore.QObject):
                         for frame in newFrames:
                             storeFile.save(frame)
                         self.updateSignal.emit()
+
             elif saveMode == 'hdf5':
                 with hdf.File(self.savename + '.hdf5', "w") as storeFile:
                     storeFile.create_dataset(
                         'Images', (1, self.shape[0], self.shape[1]),
                         maxshape=(None, self.shape[0], self.shape[1]))
                     dataset = storeFile['Images']
-#                    nFrames = len(self.lvworker.fRecorded)
                     while self.nStored < self.timeorframes and self.pressed:
                         self.tRecorded = time.time() - self.starttime
                         time.sleep(0.01)
@@ -644,7 +645,6 @@ class RecWorker(QtCore.QObject):
             laserWidget = self.main.main.laserWidgets
             laserWidget.DigCtrl.DigitalControlButton.setChecked(True)
 
-
             # Getting Z steps
             if self.scanWidget.scanMode.currentText() == 'VOL scan':
                 sizeZ = self.scanWidget.scanParValues['sizeZ']
@@ -665,7 +665,8 @@ class RecWorker(QtCore.QObject):
                                 and self.pressed:
                             time.sleep(0.01)
                             newFrames = self.lvworker.fRecorded[self.nStored:]
-                            if self.nStored + len(newFrames) > framesExpected*(i+1):
+                            if self.nStored + len(newFrames) \
+                                    > framesExpected*(i + 1):
                                 maxF = framesExpected*(i + 1) - self.nStored
                                 newFrames = newFrames[:maxF]
                             self.nStored += len(newFrames)
@@ -684,10 +685,12 @@ class RecWorker(QtCore.QObject):
                                 and self.pressed:
                             time.sleep(0.01)
                             newFrames = self.lvworker.fRecorded[self.nStored:]
-                            if self.nStored+len(newFrames) > framesExpected*(i+1):
+                            if self.nStored + len(newFrames) \
+                                    > framesExpected*(i + 1):
                                 maxF = framesExpected*(i+1)-self.nStored
                                 newFrames = newFrames[:maxF]
-                            size = (self.nStored-framesExpected*i+len(newFrames))
+                            size = (self.nStored - framesExpected*i +
+                                    len(newFrames))
                             dataset.resize(size, axis=0)
                             dataset[self.nStored:] = newFrames
                             self.nStored += len(newFrames)
@@ -722,4 +725,3 @@ class RecWorker(QtCore.QObject):
 
         self.done = True
         self.doneSignal.emit()
-
