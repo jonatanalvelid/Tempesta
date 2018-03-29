@@ -331,13 +331,14 @@ class ScanWidget(QtGui.QMainWindow):
          for each device is sent in the channel corresponding to the order of 
          the devices. The array after the device name determines the color for 
          the device in the graph"""
-        self.Device_info = [['488 Exc', [0, 247, 255]], 
-                           ['405', [130, 0, 200]], 
-                           ['488 OFF', [0, 247, 255]], 
-                           ['Camera', [255, 255, 255]]]
+        self.Device_info = [['488 Exc', 1, [0, 247, 255]], 
+                           ['405', 2, [130, 0, 200]], 
+                           ['488 OFF', 3, [0, 247, 255]], 
+                           ['Camera', 4, [255, 255, 255]]]
                            
         self.allDevices = [x[0] for x in self.Device_info]
-            
+        self.devicechannels = [x[1] for x in self.Device_info]
+        
         self.channelOrder = ['x', 'y', 'z']
 
         self.saveScanBtn = QtGui.QPushButton('Save Scan')
@@ -604,7 +605,7 @@ class ScanWidget(QtGui.QMainWindow):
                 self.main.piezoWidget.resetChannels(
                     self.stageScan.activeChannels[self.stageScan.scanMode])
             self.scanner = Scanner(
-               self.nidaq, self.stageScan, self.pxCycle, self, continuous)
+               self.nidaq, self.stageScan, self.pxCycle, self.devicechannels, self, continuous)
             self.scanner.finalizeDone.connect(self.finalizeDone)
             self.scanner.scanDone.connect(self.scanDone)
             self.scanning = True
@@ -725,7 +726,7 @@ class Scanner(QtCore.QObject):
     scanDone = QtCore.pyqtSignal()
     finalizeDone = QtCore.pyqtSignal()
 
-    def __init__(self, device, stageScan, pxCycle, main, continuous=False,
+    def __init__(self, device, stageScan, pxCycle, DOchans, main, continuous=False,
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -766,7 +767,6 @@ class Scanner(QtCore.QObject):
 
         # Same as above but for the digital signals/devices
         devs = list(self.pxCycle.sigDict.keys())
-        DOchans = range(1, 5)
         for d in DOchans:
             chanstring = 'Dev1/port0/line%s' % d
             print('Adding', chanstring)
@@ -788,7 +788,7 @@ class Scanner(QtCore.QObject):
             primSteps = self.stageScan.scans[self.stageScan.scanMode].stepsY
         # Signal for a single line
         lineSig = np.tile(fullDOsig, primSteps)
-        emptySig = np.zeros((4, int(self.stageScan.seqSamps)), dtype=bool)
+        emptySig = np.zeros((len(devs), int(self.stageScan.seqSamps)), dtype=bool)
         self.fullDOsig = np.concatenate((emptySig, lineSig, emptySig), axis=1)
 
     def runScan(self):
@@ -1580,9 +1580,9 @@ class GraphFrame(pg.GraphicsWindow):
         self.plot.showGrid(x=False, y=False)
         self.plotSigDict = dict()
         for i in range(0, len(pxCycle.sigDict)):
-            r = Device_info[i][1][0]
-            g = Device_info[i][1][1]
-            b = Device_info[i][1][2]
+            r = Device_info[i][2][0]
+            g = Device_info[i][2][1]
+            b = Device_info[i][2][2]
             self.plotSigDict[devs[i]] = self.plot.plot(pen=pg.mkPen(r,g,b))
             
 #        self.plotSigDict = {'405': self.plot.plot(pen=pg.mkPen(130, 0, 200)),
