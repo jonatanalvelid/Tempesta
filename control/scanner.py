@@ -11,7 +11,7 @@ import numpy as np
 import time
 import re
 import configparser
-
+import copy
 import pyqtgraph as pg
 from pyqtgraph.dockarea import Dock, DockArea
 from PyQt4 import QtGui, QtCore
@@ -326,7 +326,19 @@ class ScanWidget(QtGui.QMainWindow):
 
         # The port order in the NIDAQ follows this same order.
         # We chose to follow the temporal sequence order
-        self.allDevices = ['405', '488', '473', 'CAM']
+        
+        """Below is the where to set the different devices to be used. The signal
+         for each device is sent in the channel corresponding to the order of 
+         the devices. The array after the device name determines the color for 
+         the device in the graph"""
+        self.Device_info = [['488 Exc', 1, [0, 247, 255]], 
+                           ['405', 2, [130, 0, 200]], 
+                           ['488 OFF', 3, [0, 247, 255]], 
+                           ['Camera', 4, [255, 255, 255]]]
+                           
+        self.allDevices = [x[0] for x in self.Device_info]
+        self.devicechannels = [x[1] for x in self.Device_info]
+        
         self.channelOrder = ['x', 'y', 'z']
 
         self.saveScanBtn = QtGui.QPushButton('Save Scan')
@@ -394,53 +406,26 @@ class ScanWidget(QtGui.QMainWindow):
                               'stepSizeXY': float(self.stepSizeXYPar.text()),
                               'stepSizeZ': float(self.stepSizeZPar.text())}
 
-        self.start405Par = QtGui.QLineEdit('0')
-        self.start405Par.textChanged.connect(
-            lambda: self.pxParameterChanged('start405'))
-        self.start488Par = QtGui.QLineEdit('0')
-        self.start488Par.textChanged.connect(
-            lambda: self.pxParameterChanged('start488'))
-        self.start473Par = QtGui.QLineEdit('0')
-        self.start473Par.textChanged.connect(
-            lambda: self.pxParameterChanged('start473'))
-        self.startCAMPar = QtGui.QLineEdit('0')
-        self.startCAMPar.textChanged.connect(
-            lambda: self.pxParameterChanged('startCAM'))
 
-        self.end405Par = QtGui.QLineEdit('0')
-        self.end405Par.textChanged.connect(
-            lambda: self.pxParameterChanged('end405'))
-        self.end488Par = QtGui.QLineEdit('0')
-        self.end488Par.textChanged.connect(
-            lambda: self.pxParameterChanged('end488'))
-        self.end473Par = QtGui.QLineEdit('0')
-        self.end473Par.textChanged.connect(
-            lambda: self.pxParameterChanged('end473'))
-        self.endCAMPar = QtGui.QLineEdit('0')
-        self.endCAMPar.textChanged.connect(
-            lambda: self.pxParameterChanged('endCAM'))
+        self.pxParameters = dict()
+        self.pxParValues = dict()
+                            
+            
+        for i in range(0, len(self.allDevices)):
+            self.pxParameters['sta'+self.allDevices[i]] = QtGui.QLineEdit('0')
+            self.pxParameters['sta'+self.allDevices[i]].textChanged.connect(
+                lambda: self.pxParameterChanged())
+            self.pxParameters['end'+self.allDevices[i]] = QtGui.QLineEdit('50')
+            self.pxParameters['end'+self.allDevices[i]].textChanged.connect(
+                lambda: self.pxParameterChanged())
+            
+            self.pxParValues['sta'+self.allDevices[i]] = 0.001*float(self.pxParameters['sta'+self.allDevices[i]].text())
+            self.pxParValues['end'+self.allDevices[i]] = 0.001*float(self.pxParameters['end'+self.allDevices[i]].text())
 
-        self.pxParameters = {'start405': self.start405Par,
-                             'start488': self.start488Par,
-                             'start473': self.start473Par,
-                             'startCAM': self.startCAMPar,
-                             'end405': self.end405Par,
-                             'end488': self.end488Par,
-                             'end473': self.end473Par,
-                             'endCAM': self.endCAMPar}
-
-        self.pxParValues = {'start405': 0.001*float(self.start405Par.text()),
-                            'start488': 0.001*float(self.start488Par.text()),
-                            'start473': 0.001*float(self.start473Par.text()),
-                            'startCAM': 0.001*float(self.startCAMPar.text()),
-                            'end405': 0.001*float(self.end405Par.text()),
-                            'end488': 0.001*float(self.end488Par.text()),
-                            'end473': 0.001*float(self.end473Par.text()),
-                            'endCAM': 0.001*float(self.endCAMPar.text())}
 
         self.stageScan = StageScan(self.sampleRate)
-        self.pxCycle = PixelCycle(self.sampleRate)
-        self.graph = GraphFrame(self.pxCycle)
+        self.pxCycle = PixelCycle(self.sampleRate, self.allDevices)
+        self.graph = GraphFrame(self.pxCycle, self.Device_info)
         self.graph.plot.getAxis('bottom').setScale(1000/self.sampleRate)
         self.graph.setFixedHeight(100)
         self.updateScan(self.allDevices)
@@ -501,18 +486,13 @@ class ScanWidget(QtGui.QMainWindow):
         grid.addWidget(self.scanDurationLabel, 7, 3)
         grid.addWidget(QtGui.QLabel('Start (ms):'), 8, 1)
         grid.addWidget(QtGui.QLabel('End (ms):'), 8, 2)
-        grid.addWidget(QtGui.QLabel('405:'), 9, 0)
-        grid.addWidget(self.start405Par, 9, 1)
-        grid.addWidget(self.end405Par, 9, 2)
-        grid.addWidget(QtGui.QLabel('488:'), 10, 0)
-        grid.addWidget(self.start488Par, 10, 1)
-        grid.addWidget(self.end488Par, 10, 2)
-        grid.addWidget(QtGui.QLabel('473:'), 11, 0)
-        grid.addWidget(self.start473Par, 11, 1)
-        grid.addWidget(self.end473Par, 11, 2)
-        grid.addWidget(QtGui.QLabel('Camera:'), 12, 0)
-        grid.addWidget(self.startCAMPar, 12, 1)
-        grid.addWidget(self.endCAMPar, 12, 2)
+        
+        start_row = 9
+        for i in range(0, len(self.allDevices)):
+            grid.addWidget(QtGui.QLabel(self.allDevices[i]), start_row+i, 0)
+            grid.addWidget(self.pxParameters['sta'+self.allDevices[i]], start_row+i, 1)
+            grid.addWidget(self.pxParameters['end'+self.allDevices[i]], start_row+i, 2)
+
         grid.addWidget(self.graph, 8, 3, 5, 5)
 
         grid.addWidget(self.multiScanWgt, 13, 0, 4, 9)
@@ -571,11 +551,15 @@ class ScanWidget(QtGui.QMainWindow):
         self.scanDuration = self.stageScan.frames*self.scanParValues['seqTime']
         self.scanDurationLabel.setText(str(np.round(self.scanDuration, 2)))
 
-    def pxParameterChanged(self, p):
-        self.pxParValues[p] = 0.001*float(self.pxParameters[p].text())
-        device = [p[-3] + p[-2] + p[-1]]
-        self.pxCycle.update(device, self.pxParValues, self.stageScan.seqSamps)
-        self.graph.update(device)
+    def pxParameterChanged(self, dev = None):
+        if dev is None: dev = self.allDevices
+        for i in range(len(dev)):
+            self.pxParValues['sta'+dev[i]] = 0.001*float(self.pxParameters['sta'+dev[i]].text())
+            self.pxParValues['end'+dev[i]] = 0.001*float(self.pxParameters['end'+dev[i]].text())
+            print('In pxParameterChanged for device :', dev[i])
+            
+        self.pxCycle.update(dev, self.pxParValues, self.stageScan.seqSamps)
+        self.graph.update(dev)
 
     def previewScan(self):
         self.updateScan(self.allDevices)
@@ -604,7 +588,7 @@ class ScanWidget(QtGui.QMainWindow):
             main = self.main
             lasers = main.laserWidgets
             if (lasers.DigCtrl.DigitalControlButton.isChecked() and
-               main.trigsourceparam.value() == 'External "frame-trigger"'):
+                main.trigsourceparam.value() == 'External "frame-trigger"'):
                 self.prepAndRun()
             else:
                 self.digModWarning.exec_()
@@ -621,7 +605,7 @@ class ScanWidget(QtGui.QMainWindow):
                 self.main.piezoWidget.resetChannels(
                     self.stageScan.activeChannels[self.stageScan.scanMode])
             self.scanner = Scanner(
-               self.nidaq, self.stageScan, self.pxCycle, self, continuous)
+               self.nidaq, self.stageScan, self.pxCycle, self.devicechannels, self, continuous)
             self.scanner.finalizeDone.connect(self.finalizeDone)
             self.scanner.scanDone.connect(self.scanDone)
             self.scanning = True
@@ -742,7 +726,7 @@ class Scanner(QtCore.QObject):
     scanDone = QtCore.pyqtSignal()
     finalizeDone = QtCore.pyqtSignal()
 
-    def __init__(self, device, stageScan, pxCycle, main, continuous=False,
+    def __init__(self, device, stageScan, pxCycle, DOchans, main, continuous=False,
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -783,14 +767,14 @@ class Scanner(QtCore.QObject):
 
         # Same as above but for the digital signals/devices
         devs = list(self.pxCycle.sigDict.keys())
-        DOchans = range(0, 4)
         for d in DOchans:
             chanstring = 'Dev1/port0/line%s' % d
+            print('Adding', chanstring)
             self.dotask.do_channels.add_do_chan(
                 lines=chanstring, name_to_assign_to_lines='chan%s' % devs[d])
 
         fullDOsig = np.array(
-            [self.pxCycle.sigDict[devs[i]] for i in DOchans])
+            [self.pxCycle.sigDict[devs[i]] for i in range(0,len(devs))])
 
         """When doing unidirectional scan, the time needed for the stage to
         move back to the initial x needs to be filled with zeros/False.
@@ -804,7 +788,7 @@ class Scanner(QtCore.QObject):
             primSteps = self.stageScan.scans[self.stageScan.scanMode].stepsY
         # Signal for a single line
         lineSig = np.tile(fullDOsig, primSteps)
-        emptySig = np.zeros((4, int(self.stageScan.seqSamps)), dtype=bool)
+        emptySig = np.zeros((len(devs), int(self.stageScan.seqSamps)), dtype=bool)
         self.fullDOsig = np.concatenate((emptySig, lineSig, emptySig), axis=1)
 
     def runScan(self):
@@ -1277,16 +1261,20 @@ class LaserCycle():
         self.dotask = nidaqmx.Task('dotaskLaser')
 
         devs = list(self.pxCycle.sigDict.keys())
-        DOchans = range(0, 4)
-        for d in DOchans:
-            chanstring = 'Dev1/port0/line%s' % d
+        DOchans = range(1,5)
+        assert len(devs) == len(DOchans), '# digital channels is not the same as # devices'
+        it = range(0, len(devs))
+        for i in it:
+            print('Adding line', DOchans[i])
+            chanstring = 'Dev1/port0/line%s' % DOchans[i]
             self.dotask.do_channels.add_do_chan(
-                lines=chanstring, name_to_assign_to_lines='chan%s' % devs[d])
-
-        DOchans = [0, 1, 2, 3]
+                lines=chanstring, name_to_assign_to_lines='chan%s' % devs[i])
+        
+        print('Finished adding lines')
+        
         fullDOsig = np.array(
-            [self.pxCycle.sigDict[devs[i]] for i in DOchans])
-
+            [self.pxCycle.sigDict[devs[i]] for i in range(0, len(DOchans))])
+        
         self.dotask.timing.cfg_samp_clk_timing(
            source=r'100kHzTimeBase',
            rate=self.pxCycle.sampleRate,
@@ -1556,9 +1544,12 @@ class VOLscan():
 class PixelCycle():
     ''' Contains the digital signals for the pixel cycle. The update function
     takes a parameter_values dict and updates the signal accordingly.'''
-    def __init__(self, sampleRate):
-        self.sigDict = collections.OrderedDict(
-            [('405', []), ('488', []), ('473', []), ('CAM', [])])
+    def __init__(self, sampleRate, devices):
+        self.sigDict = collections.OrderedDict()
+        for dev in devices:
+            self.sigDict[dev] = []
+#        self.sigDict = collections.OrderedDict(
+#            [('405', []), ('488', []), ('473', []), ('CAM', [])])
         self.sampleRate = sampleRate
         self.cycleSamps = None
 
@@ -1566,7 +1557,7 @@ class PixelCycle():
         self.cycleSamps = cycleSamps
         for device in devices:
             signal = np.zeros(cycleSamps, dtype='bool')
-            start_name = 'start' + device
+            start_name = 'sta' + device
             end_name = 'end' + device
             start_pos = parValues[start_name] * self.sampleRate
             start_pos = int(min(start_pos, cycleSamps - 1))
@@ -1579,17 +1570,25 @@ class PixelCycle():
 class GraphFrame(pg.GraphicsWindow):
     """Creates the plot that plots the preview of the pulses.
     Fcn update() updates the plot of "device" with signal "signal"."""
-    def __init__(self, pxCycle, *args, **kwargs):
+    def __init__(self, pxCycle, Device_info, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.pxCycle = pxCycle
+        devs = list(pxCycle.sigDict.keys())
         self.plot = self.addPlot(row=1, col=0)
         self.plot.setYRange(0, 1)
         self.plot.showGrid(x=False, y=False)
-        self.plotSigDict = {'405': self.plot.plot(pen=pg.mkPen(130, 0, 200)),
-                            '488': self.plot.plot(pen=pg.mkPen(0, 247, 255)),
-                            '473': self.plot.plot(pen=pg.mkPen(0, 183, 255)),
-                            'CAM': self.plot.plot(pen='w')}
+        self.plotSigDict = dict()
+        for i in range(0, len(pxCycle.sigDict)):
+            r = Device_info[i][2][0]
+            g = Device_info[i][2][1]
+            b = Device_info[i][2][2]
+            self.plotSigDict[devs[i]] = self.plot.plot(pen=pg.mkPen(r,g,b))
+            
+#        self.plotSigDict = {'405': self.plot.plot(pen=pg.mkPen(130, 0, 200)),
+#                            '488': self.plot.plot(pen=pg.mkPen(0, 247, 255)),
+#                            '473': self.plot.plot(pen=pg.mkPen(0, 183, 255)),
+#                            'CAM': self.plot.plot(pen='w')}
 
     def update(self, devices=None):
         if devices is None:
