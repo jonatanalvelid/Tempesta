@@ -28,6 +28,7 @@ import control.lasercontrol_fra as lasercontrol
 import control.scanner as scanner
 import control.guitools as guitools
 import control.focus as focus
+import control.recording as record
 
 
 class CamParamTree(ParameterTree):
@@ -422,7 +423,7 @@ class TormentaGUI(QtGui.QMainWindow):
         self.statusBar().addPermanentWidget(self.cursorPosInt)
 
         # Recording settings widget
-        self.recWidget = RecordingWidget(self)
+        self.recWidget = record.RecordingWidget(self)
 
         # Image Widget
         imageWidget = pg.GraphicsLayoutWidget()
